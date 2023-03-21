@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import multiprocessing
 
 import logging
 
@@ -62,7 +63,11 @@ def main(folder="./sim", nant=36, nt=100, nave=1000000, srcflux=0.01, prefix="si
     
     dump_data(c_data, n_data, f"{folder}/{fname}")
     
+def main_multipro(folder="./sim", nant=36, nt=200, nave=1000000, srclist=[], prefix="test_multi", ncpu=6):
+    params = [(folder, nant, nt, nave, srcflux, prefix) for srcflux in srclist]
     
+    pool = multiprocessing.Pool(ncpu)
+    pool.starmap(main, params)
     
 if __name__ == "__main__":
     nt = 200
