@@ -91,9 +91,22 @@ def SEFD_ant_fit(SEFD_pairs, nant, defaultSEFD):
     SEFD_ant, cov = leastsq(SEFD_pairs_function, x0, args=SEFD_pairs)
     return SEFD_ant
 
+def mask_extreme_value(series, loop = 10, stdtor = 3):
+    series = series.copy()
 
-def main(calmspath, sample_ave=30, srcflux=15, defaultSEFD=1000, pathdir="."):
+    for i in range(loop):
+        median = np.nanmedian(series)
+        std = np.nanstd(series)
+
+        series[series > median + stdtor * std] = np.nan
+
+    return series
+
+
+def main(calmspath, sample_ave=30, srcflux=15, defaultSEFD=2., pathdir="."):
     if calmspath.endswith("/"): calmspath = calmspath[:-1]
+    calmsname = calmspath.split("/")[-1]
+    
     logger.info("loading calibrated visibility...")
     caltab = tables.table(calmspath)
 
@@ -140,8 +153,27 @@ def main(calmspath, sample_ave=30, srcflux=15, defaultSEFD=1000, pathdir="."):
     logger.info("calculating snr of the observation...")
     tavem_ = np.nanmean(tave_crossreal, axis=0)
     taves_ = np.nanstd(tave_crossreal, axis=0)
+    snr = tavem_ / taves_
+    
+    flagged_ratio = 0.2
+    SEFD_pairs = (srcflux/snr * np.sqrt(1 - flagged_ratio))**2 * 2 * 2 * fres * sample_ave * tres / 1e6 # in the unit of (K Kelvin)**2
 
-    SEFD_pairs = (srcflux / (tavem_ / taves_))**2 * fres * sample_ave * tres / 2
+    ### save SEFD pairs to numpy files
+    logger.info("saving raw SEFD baseline value to file...")
+    np.save(f"{pathdir}/{calmsname}.SEFD.baseline.npy", SEFD_pairs)
+
+    ### mask out extreme values and keep a copy
+    logger.info("masking extreme values...")
+    for ichan in range(nchan):
+        SEFD_pairs[:, ichan, 0] = mask_extreme_value(SEFD_pairs[:, ichan, 0])
+
+    ### check how many data has been masked...
+    nnum = SEFD_pairs.size
+    nflag = np.isnan(SEFD_pairs).sum()
+    logger.info(f"{nflag}/{nnum} = {100*nflag/nnum:.2f}% data has been flagged...")
+
+    logger.info("saving masked SEFD baseline value to file...")
+    np.save(f"{pathdir}/{calmsname}.SEFD.baseline.mask.npy", SEFD_pairs)
 
     logger.info("fitting antenna temperatures...")
     SEFD_ants = []
@@ -154,7 +186,6 @@ def main(calmspath, sample_ave=30, srcflux=15, defaultSEFD=1000, pathdir="."):
 
     SEFD_ants[SEFD_ants == defaultSEFD] = np.nan # it cannot be the initial value after fitting...
 
-    calmsname = calmspath.split("/")[-1]
     logger.info(f"saving final antenna temperature to {pathdir}/{calmsname}.SEFDant.npy...")
     np.save(f"{pathdir}/{calmsname}.SEFDant.npy", SEFD_ants)
     
