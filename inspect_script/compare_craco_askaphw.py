@@ -6,6 +6,8 @@ import glob
 import warnings
 import logging
 
+from astropy.time import Time
+
 from casacore import tables
 
 ### set logger...
@@ -243,15 +245,29 @@ def load_measurement_sets(craco_tab_path, hw_tab_path):
 #     hwuvw_raw = hwuvw.copy()
 #     cracouvw_raw = cracouvw.copy()
 
-    UTCTAI_DIFF = 37
+    # UTCTAI_DIFF = 37
+#     UTCTAI_DIFF = 32
+#     OFFSET = 4.921343999906779 # t1
+#     OFFSET = 5.031936000093222 # t2
+#     OFFSET = 4.866047999813557 # t3
+#     OFFSET = 5.087232000186444 # t4
+    OFFSET = 4.976640000000001 # t5 => which is the half of the askap hardware integration
+#     OFFSET = 5.0042880000466115 # t6
 
     logger.warning("craco and askap hardware are using different time system...")
 
-    cracorawtime = np.unique(cracotab.getcol("TIME")) - UTCTAI_DIFF
+    # cracorawtime = np.unique(cracotab.getcol("TIME")) - UTCTAI_DIFF
+    cracorawtime = Time(
+        np.unique(cracotab.getcol("TIME")) / 3600 / 24, 
+        format="mjd", scale="tai"
+    ).utc.value * 3600 * 24
+    cracorawtime = cracorawtime + OFFSET  #<============= apply the offset to check
     hwrawtime = np.unique(hwtab.getcol("TIME"))
 
     craco_nt = cracorawtime.shape[0]
     hw_nt = hwrawtime.shape[0]
+    
+    logger.info(f"number of integrations - craco: {craco_nt}; askap hardware: {hw_nt}")
 
     assert craco_nt == cracodata.shape[0], "different number of integrations found in craco data..."
     assert hw_nt == hwdata.shape[0], "different number of integrations found in craco data..."
