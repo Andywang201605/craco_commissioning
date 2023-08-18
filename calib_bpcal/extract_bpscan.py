@@ -18,7 +18,7 @@ import logging
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def split_bpcal_allscam(sbid):
+def split_bpcal_allscam(sbid, mstype="full"):
     """
     the structure should be: SB050677/scans/00/20230622110317/00
     """
@@ -28,7 +28,7 @@ def split_bpcal_allscam(sbid):
     sbidcalpath = "{}/{}/scans/00/19000101000000".format(cfg.CALIBRATION_PATH, sbid)
 
     for beam in range(36):
-        try: _split_bpcal_beamscan(sbid, beam, sbidcalpath)
+        try: _split_bpcal_beamscan(sbid, beam, sbidcalpath, mstype)
         except: continue
 
 def _polsum_ms(msfname):
@@ -52,7 +52,7 @@ def _polsum_ms(msfname):
 
     tab.close()
 
-def _split_bpcal_beamscan(sbid, beam, calpath):
+def _split_bpcal_beamscan(sbid, beam, calpath, mstype="full"):
     """
     split the bandpass observation scan for a given SBID and a given scan
     """
@@ -74,13 +74,22 @@ def _split_bpcal_beamscan(sbid, beam, calpath):
 
     ### start perform splitting...
     log.info("splitting measurement sets for BEAM{:0>2}".format(beam))
-    split(
-        vis=beamms_path,
-        outputvis=bpscanms_path,
-        scan=str(beam),
-        datacolumn="data",
-        correlation="XX,YY",
-    )
+    if mstype == "full":
+        split(
+            vis=beamms_path,
+            outputvis=bpscanms_path,
+            scan=str(beam),
+            datacolumn="data",
+            correlation="XX,YY",
+        )
+    elif mstype == "single":
+        split(
+            vis=beamms_path,
+            outputvis=bpscanms_path,
+            scan="0",
+            datacolumn="data",
+            correlation="XX,YY",
+        )
 
     ### perform polsum
     _polsum_ms(bpscanms_path)
@@ -103,9 +112,12 @@ if __name__ == "__main__":
     a.add_argument(
         "-sbid", type=str, help="Schedule block used for calibration",
     )
+    a.add_argument(
+        "-mstype", type=str, help="Type of the measurement sets, either full or single", default="single"
+    )
     args = a.parse_args()
 
-    split_bpcal_allscam(args.sbid)
+    split_bpcal_allscam(args.sbid, args.mstype)
     os.system("rm casa*.log")
 
 
