@@ -1,5 +1,33 @@
 from casacore import tables
 import numpy as np
+import pickle
+
+def load_pickle_data(fname):
+    with open(fname, "rb") as fp:
+        data = pickle.load(fp)
+    return data
+
+def make_tabdesc(coldesc):
+    """
+    make table description based on the json file
+    """
+    coldesc = [tables.makecoldesc(col, coldesc[col]) for col in coldesc]
+    return tables.maketabdesc(coldesc)
+
+def _work_refant(bp):
+    bp = bp[0]
+    nant, nchan, npol = bp.shape
+    for iant in range(nant):
+        antdata = bp[iant, :, (0, 3)]
+        antdata_degree = np.angle(antdata, deg=True)
+        if (abs(antdata_degree) > 0.1).sum() == 0:
+            return iant
+    raise ValueError("no reference antenna found...")
+#     for iant in range(nant):
+#         antdata = bp[iant, :, (0, 3)]
+#         if np.isnan(antdata).sum() == 0:
+#             return iant
+#     raise ValueError("no reference antenna found...")
 
 def make_caltab(calpath, bp, refant=None, datapath="./data"):
     _, nant, nchan, npol = bp.shape
@@ -117,4 +145,25 @@ def make_full_casabp(calpath, bp, freqs, datapath="./data", refant=None):
     make_histab(calpath, datapath=datapath)
     make_obstab(calpath, datapath=datapath)
     make_anttab(calpath, datapath=datapath)
-    
+
+    ### add keywords
+    t = tables.table(calpath, readonly=False)
+    t.putkeyword("ParType", "Complex")
+    # t.putkeyword("MSName", "cal.B0")
+    t.putkeyword("VisCal", "B Jones")
+    t.putkeyword("PolBasis", "unknown")
+    t.putkeyword("OBSERVATION", f"Table: {calpath}/OBSERVATION")
+    t.putkeyword("ANTENNA", f"Table: {calpath}/ANTENNA")
+    t.putkeyword("FIELD", f"Table: {calpath}/FIELD")
+    t.putkeyword("SPECTRAL_WINDOW", f"Table: {calpath}/SPECTRAL_WINDOW")
+    t.putkeyword("HISTORY", f"Table: {calpath}/HISTORY")
+    t.flush()
+
+    ### add info...
+    t.putinfo({
+        "type": "Calibration",
+        "subType": "B Jones",
+        "readme": "",
+    })
+
+    t.close()
